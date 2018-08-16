@@ -1,0 +1,45 @@
+
+public class Euler4 {
+	public static void main(String[] args) {
+        boolean palindrome_found = false;
+        int first_number,second_number, result;
+        first_number = 999;
+        second_number = 999;
+        int max_palindrome = 0;
+        String palindrome;
+        String reversed_palindrome;
+        result = first_number*first_number;
+        do{
+        	while(result>100001)//enquanto o palíndromo tiver 6 dígitos
+        	{
+        		result-=first_number; // equivalente a second_number--; result = first_number*second_number;
+        		second_number--; //apenas para checagem dos 3 digitos
+        		palindrome = Integer.toString(result);
+        		StringBuilder sb = new StringBuilder(palindrome);
+        		reversed_palindrome = sb.reverse().toString();
+        		if(palindrome.equals(reversed_palindrome))
+        		{
+        			palindrome_found = true;
+        			if(result>max_palindrome)
+        			{
+        				max_palindrome = result;
+        			}
+        			break;//próximos palindromos com first_number atual terao valor menor que o encontrado
+        		}
+        	}
+        	first_number--;
+        	second_number = first_number;
+        	result = first_number*first_number;
+        }while((result>100001)&&(result>max_palindrome));//enquanto o resultado tem 6 dígitos
+        if(palindrome_found)
+        {
+        	System.out.println("Maior palindromo produto de dois números de 3 dígitos:"+max_palindrome);
+        }
+        //Se não encontrar palindromo com 6 dígitos
+        /*
+        else
+        {
+        }
+         */
+    }
+}
