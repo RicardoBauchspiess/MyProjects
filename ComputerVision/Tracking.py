@@ -4,12 +4,13 @@ Created on Tue Sep 11 20:56:40 2018
 
 @author: Ricardo
 """
+import os
 
 import numpy as np
 import cv2
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
-
+os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
 #função de retorno do mouse para obter templates, grava os pontos inicial e final da região desejada
 point = []
@@ -34,7 +35,7 @@ def click_and_crop(event, x, y, flags, param):
         point[1] = (x, y)
         
 
-
+cont = 5;
 template_num = 0;
 template1 = False
 template2 = False
@@ -58,11 +59,29 @@ cv2.setMouseCallback("Video", click_and_crop)
 # Inicia detectores SIFT ou SURF
 
 #sift = cv2.xfeatures2d.SIFT_create()
-surf = cv2.xfeatures2d.SURF_create(100)
+surf = cv2.xfeatures2d.SURF_create(400)
 
 #Inicia matcher brute force
-MIN_MATCH_COUNT = 8
+MIN_MATCH_COUNT = 5
 bf = cv2.BFMatcher()
+
+initBB = None
+
+global gray_roi1, gray_roi2, kp1, kp2
+
+
+
+
+#Create surf for
+"""
+img = cv2.imread("1.jpg")
+cv2.imshow("img1",img)
+gray_roi1 = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+kp1, des1 = surf.detectAndCompute(img,None)
+h1,w1 = gray_roi1.shape
+Template1 = True
+"""
+
 
 
 while True:
@@ -71,47 +90,91 @@ while True:
         _, frame = video_capture.read() # We get the last frame.
     temp_image = frame.copy()
 
+    W,H = frame.shape[:2]
     #Desenha retangulo na região selecionada pelo usuário
     if cropping == True and len(point) == 2:
         cv2.rectangle(temp_image, point[0], point[1], (0, 255, 0), 2)
     if template1 == True or template2 == True:
         #converte imagem para tons de cinza e obtém os pontos chaves e descritores do último frame
-        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        kp, des = surf.detectAndCompute(gray_image,None)
-        #kp2, des2 = sift.detectAndCompute(gray_image,None)
+        #gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        #kp, des = surf.detectAndCompute(gray_image,None)
+        #kp2, des2 = sift.detectAndCompute(gray_image,None)                
         if template1 == True:
+            #Predição
+            (success, box) = tracker1.update(frame)
+            if success:
+                (x, y, w, h) = [int(v) for v in box]
+                cv2.rectangle(temp_image, (x, y), (x + w, y + h),(255, 255,0), 2)
+            xmin = int(max(x-0.1*w,0))
+            xmax = int(min(x+0.1*w,W))
+            ymin = int(max(y-0.1*h,0))		
+            ymax = int(min(y+0.1*h,H))
+            #roi = frame[ymin:ymax, xmin:xmax].copy()
+            gray_roi = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY) #converte imagem para tons de cinza
+            #Encontra pontos chave e descritores do template com SIFT ou SURF
+            kp, des = surf.detectAndCompute(gray_roi,None)
+            
+                
             matches = bf.knnMatch(des1, des, k=2)
              #Salva as boas correspondências
             good = []
             for m,n in matches:
                 if m.distance < 0.7*n.distance:
                     good.append(m)
-                    
+            
+            kt = []
+            for m in good:
+                kt.append(kp[m.trainIdx])
+            temp_image = cv2.drawKeypoints(temp_image, kt,None,(255,0,0),4)
             if len(good)>MIN_MATCH_COUNT:
                 #obtém pontos equivalentes entre template e frame
                 src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
                 dst_pts = np.float32([ kp[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+                
+                
             
                 #obtém transformação entre pontos do template e do frame
                 M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-                if mask is not None:
+                if mask is not None and M is not None:
                     matchesMask = mask.ravel().tolist()
                 
                     #transforma retângulo do template em região equivalente no frame e desenha quadrilátero
-                    h,w = gray_roi1.shape
-                    pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+                    pts = np.float32([ [0,0],[0,h1-1],[w1-1,h1-1],[w1-1,0] ]).reshape(-1,1,2)
                     dst = cv2.perspectiveTransform(pts,M)
-                    temp_image = cv2.polylines(temp_image,[np.int32(dst)],True,(255,0,0),3, cv2.LINE_AA)
+                    #temp_image = cv2.polylines(temp_image,[np.int32(dst)],True,(255,0,0),3, cv2.LINE_AA)
          
-                    cv2.putText(temp_image,"1",(dst[0,0,0],dst[0,0,1]), font, 0.8,(255,0,0),2,cv2.LINE_AA)
+                    cv2.putText(temp_image,"1",(dst[3,0,0],dst[3,0,1]), font, 0.8,(255,0,0),2,cv2.LINE_AA)
+                    
+                    x_min = max(np.int32( (dst[0,0,0]+dst[1,0,0])/2 ),0)
+                    y_min = max(np.int32( (dst[0,0,1]+dst[3,0,1])/2  ),0)
+                    x_max = np.int32( (dst[2,0,0]+dst[3,0,0])/2 )
+                    y_max = np.int32( (dst[1,0,1]+dst[2,0,1])/2 )
+                    if x_min != x_max and y_min != y_max:
+                        cv2.rectangle(temp_image, (x_min,y_min), (x_max,y_max), (255,0,0), 2)
+                                                                    
+
         if template2 == True:
+            (success, box) = tracker2.update(frame)
+            if success:
+                (x, y, w, h) = [int(v) for v in box]
+                cv2.rectangle(temp_image, (x, y), (x + w, y + h),(0,255, 255), 2)
+            
+            gray_roi = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY) #converte imagem para tons de cinza
+            #Encontra pontos chave e descritores do template com SIFT ou SURF
+            kp, des = surf.detectAndCompute(gray_roi,None)
+            
+            
             matches = bf.knnMatch(des2, des, k=2)
              #Salva as boas correspondências
             good = []
             for m,n in matches:
                 if m.distance < 0.7*n.distance:
                     good.append(m)
-                    
+            
+            kt = []
+            for m in good:
+                kt.append(kp[m.trainIdx])
+            temp_image = cv2.drawKeypoints(temp_image, kt,None,(0,0,255),4)
             if len(good)>MIN_MATCH_COUNT:
                 #obtém pontos equivalentes entre template e frame
                 src_pts = np.float32([ kp2[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
@@ -119,44 +182,67 @@ while True:
             
                 #obtém transformação entre pontos do template e do frame
                 M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-                if mask is not None:
+                if mask is not None and M is not None:
                     matchesMask = mask.ravel().tolist()
                 
                     #transforma retângulo do template em região equivalente no frame e desenha quadrilátero
                     h,w = gray_roi2.shape
                     pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
                     dst = cv2.perspectiveTransform(pts,M)
-                    temp_image = cv2.polylines(temp_image,[np.int32(dst)],True,(0,0,255),3, cv2.LINE_AA)
+                    #temp_image = cv2.polylines(temp_image,[np.int32(dst)],True,(0,0,255),3, cv2.LINE_AA)
                     cv2.putText(temp_image,'2',(dst[0,0,0],dst[0,0,1]), font, 0.8,(0,0,255),2,cv2.LINE_AA)
-
+                    
+                    
+                    x_min = np.int32( (dst[0,0,0]+dst[1,0,0])/2 )
+                    y_min = np.int32( (dst[0,0,1]+dst[3,0,1])/2  )
+                    x_max = np.int32( (dst[2,0,0]+dst[3,0,0])/2 )
+                    y_max = np.int32( (dst[1,0,1]+dst[2,0,1])/2 )
+                    if x_min != x_max and y_min != y_max:
+                        cv2.rectangle(temp_image, (x_min,y_min), (x_max,y_max), (0,0,255), 2)
+                    
+                    
     if done == True and (point[0][1] != point[1][1] or point[0][0] != point[1][0]):
         #Se tiver a região selecionada pelo mouse salva template
         done = False
         if point[0][1] < point[1][1]:
             if point[0][0]<point[1][0]:
                 roi = frame[point[0][1]:point[1][1]+1, point[0][0]:point[1][0]+1]
+
+                initBB = (point[0][0],point[0][1],point[1][0]+1-point[0][0],point[1][1]+1-point[0][1])
             else:
                 roi = frame[point[0][1]:point[1][1]+1, point[1][0]:point[0][0]+1]
+                initBB = (point[0][0],point[1][1],point[1][0]+1-point[0][0],point[0][1]+1-point[1][1])
         else:
             if point[0][0]<point[1][0]:
                 roi = frame[point[1][1]:point[0][1]+1, point[0][0]:point[1][0]+1]
+                initBB = (point[1][0],point[0][1],point[0][0]+1-point[1][0],point[1][1]+1-point[0][1])
             else:
                 roi = frame[point[1][1]:point[0][1]+1, point[1][0]:point[0][0]+1]
+                initBB = (point[1][0],point[1][1], point[0][0]+1-point[1][0],point[0][1]+1-point[1][1])
+                
         if template_num == 1:      
             cv2.imshow('ROI1', roi) #mostra template atual
             gray_roi1 = cv2.cvtColor(roi,cv2.COLOR_BGR2GRAY) #converte imagem para tons de cinza
             #Encontra pontos chave e descritores do template com SIFT ou SURF
             kp1, des1 = surf.detectAndCompute(gray_roi1,None)
+            h1,w1 = gray_roi1.shape
             #kp1, des1 = sift.detectAndCompute(gray_roi,None)
             template1 = True;
+            tracker1 = cv2.TrackerCSRT_create()
+            tracker1.init(frame, initBB)
+            
         elif template_num == 2:
             cv2.imshow('ROI2', roi) #mostra template atual
             gray_roi2 = cv2.cvtColor(roi,cv2.COLOR_BGR2GRAY) #converte imagem para tons de cinza
             #Encontra pontos chave e descritores do template com SIFT ou SURF
             kp2, des2 = surf.detectAndCompute(gray_roi2,None)
+            h2,w2 = gray_roi2.shape
             #kp1, des1 = sift.detectAndCompute(gray_roi,None)
             template2 = True;
-        
+            tracker2 = cv2.TrackerCSRT_create()
+            tracker2.init(frame, initBB)
+            
+
     #mostra imagem na tela e salva em video
     cv2.putText(temp_image,str(template_num),(0,20), font, 0.8,(0,255,0),2,cv2.LINE_AA)
     video_writer.write(temp_image)
@@ -175,7 +261,7 @@ while True:
             cv2.destroyWindow('ROI1')
         elif template_num == 2:
             template2 = False
-            cv2.destroyWindow('ROI2')
+            cv2.destroyWindow('ROI2')        
     elif c == ord("1"):
         template_num = 1
     elif c == ord("2"):
