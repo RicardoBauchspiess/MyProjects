@@ -56,10 +56,10 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 
 #---------------Parâmetros Detector de Features
 #Inicia SURF
-surf = cv2.xfeatures2d.SURF_create(400)
+surf = cv2.xfeatures2d.SURF_create(450)
 
 #Inicia matcher brute force
-MIN_MATCH_COUNT = 10
+MIN_MATCH_COUNT = 15
 bf = cv2.BFMatcher()
 
 
@@ -98,6 +98,7 @@ while True:
         kp, des = surf.detectAndCompute(gray_image,None)
                    
         if template1 == True:
+            deteccao = False
             #Etapa de predição do EKF
             (success, box) = tracker1.update(frame)
             if success:
@@ -159,6 +160,7 @@ while True:
                     #Se a distancia de Mahalanobis estiver abaixo do valor de confiabilidade 95%
                     #para 4 graus de liberdade, a medição é aceita
                     if Mdist < 9.488:
+                        deteccao = True
                         #Atualiza estado e matriz de covariâncias
                         K = P*Minv
                         X = X+K*q
@@ -168,12 +170,19 @@ while True:
                             initBB = (X[0],X[1], X[2]+1-X[0],X[3]+1-X[1])
                             tracker1 = cv2.TrackerCSRT_create()
                             tracker1.init(frame, initBB)
-            #Desenha retangulo na região definida
-            cv2.putText(temp_image,"1",(np.int(X[0,0]),np.int(X[1,0])), font, 0.8,(255,0,0),2,cv2.LINE_AA)      
-            cv2.rectangle(temp_image, (np.int(X[0,0]),np.int(X[1,0])), (np.int(X[2,0]),np.int(X[3,0])), (255,0,0), 2)
+            #verifica se o objeto saiu do frame e ignora rastreador em caso positivo
+            if deteccao == False and (X[0]==0 or X[1] == 0 or X[2] >= W-1 or X[3] >= H-1):
+                non_detect1 = non_detect1+1
+            else:
+                non_detect1 = 0
+            if non_detect1<5:
+                #Desenha retangulo na região definida
+                cv2.putText(temp_image,"1",(np.int(X[0,0]),np.int(X[1,0])), font, 0.8,(255,0,0),2,cv2.LINE_AA)      
+                cv2.rectangle(temp_image, (np.int(X[0,0]),np.int(X[1,0])), (np.int(X[2,0]),np.int(X[3,0])), (255,0,0), 2)
                                                                                                         
 
         if template2 == True:
+            deteccao = False
             #Etapa de predição do EKF
             (success, box) = tracker2.update(frame)
             if success:
@@ -237,6 +246,7 @@ while True:
                     #para 4 graus de liberdade, a medição é aceita
                     if Mdist < 9.488:
                         #Atualiza estado e matriz de covariâncias
+                        deteccao = True
                         K = P2*Minv
                         X2 = X2+K*q
                         P2 = (np.eye(4)-K)*P2*(np.eye(4)-K).transpose()+K*R2*K.transpose()
@@ -245,9 +255,15 @@ while True:
                             initBB = (X2[0],X2[1], X2[2]+1-X2[0],X2[3]+1-X2[1])
                             tracker2 = cv2.TrackerCSRT_create()
                             tracker2.init(frame, initBB)
-                    
-            cv2.putText(temp_image,'2',(np.int(X2[0,0]),np.int(X2[1,0])), font, 0.8,(0,0,255),2,cv2.LINE_AA)
-            cv2.rectangle(temp_image, (np.int(X2[0,0]),np.int(X2[1,0])), (np.int(X2[2,0]),np.int(X2[3,0])), (0,0,255), 2)
+            #verifica se o objeto saiu do frame e ignora rastreador em caso positivo
+            if deteccao == False and (X2[0]==0 or X2[1] == 0 or X2[2] >= W-1 or X2[3] >= H-1):
+                non_detect2 = non_detect2+1
+            else:
+                non_detect2 = 0
+            if non_detect2<5:
+                #Desenha retangulo na região definida
+                cv2.putText(temp_image,'2',(np.int(X2[0,0]),np.int(X2[1,0])), font, 0.8,(0,0,255),2,cv2.LINE_AA)
+                cv2.rectangle(temp_image, (np.int(X2[0,0]),np.int(X2[1,0])), (np.int(X2[2,0]),np.int(X2[3,0])), (0,0,255), 2)
     if done == True and (point[0][1] != point[1][1] or point[0][0] != point[1][0]):
         #Se tiver a região selecionada pelo mouse salva template
         done = False
@@ -268,6 +284,7 @@ while True:
                 initBB = (point[1][0],point[1][1], point[0][0]+1-point[1][0],point[0][1]+1-point[1][1])
                 
         if template_num == 1:
+            non_detect1 = 0
             template1 = True;
             #cv2.imshow('ROI1', roi) #mostra template atual
             gray_roi1 = cv2.cvtColor(roi,cv2.COLOR_BGR2GRAY) #converte imagem para tons de cinza
@@ -285,6 +302,7 @@ while True:
 
             
         elif template_num == 2:
+            non_detect2 = 0
             template2 = True;
             #cv2.imshow('ROI2', roi) #mostra template atual
             gray_roi2 = cv2.cvtColor(roi,cv2.COLOR_BGR2GRAY) #converte imagem para tons de cinza
