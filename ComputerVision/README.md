@@ -18,7 +18,7 @@ Obtém pontos chaves e descritores da região selecionada
 
 -Etapa de predição do EKF   
 Predição da região nova (X_k+1|k) obtida pelo rastreador CSRT  
-Atualização da matriz de covariâncias P = F*P*F'+Q com F = k*diagonal(dx1,dy1,dx2,dy2)+I, sendo dn a variação da variável de estado n   
+Atualização da matriz de covariâncias P = F*P*F'+Q com F = C*diagonal(dx1,dy1,dx2,dy2)+I, sendo dn a variação da variável de estado n e C uma constante de calibração  
 
 -Etapa de atualização do EKF  
 SURF+Brute Force Matcher obtém correspondência entre pontos da imagem e pontos do template inicial  
